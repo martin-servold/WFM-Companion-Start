@@ -375,9 +375,10 @@
     <None Include="icon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="PostBuild.ps1" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force -Path 'C:\Program Files (x86)\Steam\steamapps\common\Wildfrost\Modded\Wildfrost_Data\StreamingAssets\Mods\companionstart' | Out-Null; Copy-Item -Path '$(TargetDir)$(TargetName).dll' -Destination 'C:\Program Files (x86)\Steam\steamapps\common\Wildfrost\Modded\Wildfrost_Data\StreamingAssets\Mods\companionstart' -Force; Copy-Item -Path '$(ProjectDir)icon.png' -Destination 'C:\Program Files (x86)\Steam\steamapps\common\Wildfrost\Modded\Wildfrost_Data\StreamingAssets\Mods\companionstart' -Force"</PostBuildEvent>
+    <PostBuildEvent>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)PostBuild.ps1" -SolutionDir "$(SolutionDir.TrimEnd('\'))" -TargetPath "$(TargetPath)" -IconPath "$(ProjectDir)icon.png" -ModRoot "C:\Program Files (x86)\Steam\steamapps\common\Wildfrost\Modded\Wildfrost_Data\StreamingAssets\Mods\companionstart"</PostBuildEvent>
   </PropertyGroup>
 </Project>

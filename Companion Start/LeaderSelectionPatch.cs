@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
@@ -67,6 +68,30 @@ namespace CompanionStart
             scroller.bounds = scrollBoundsRect;
 
             containerField.SetValue(grid);
+        }
+    }
+
+    // SelectLeader.GenerateLeaders draws every leader from a shuffled LeaderPool, so with the
+    // full-roster fix above, companions would otherwise show up in random order each visit.
+    // SetLeaderPositions runs once after all leaders for this screen are created and right before
+    // it positions them via CardContainer.GetChildPosition, which (for the CardContainerGrid we
+    // swap in above) derives each card's row/column purely from its index in the container's
+    // internal "entities" list - so sorting that list here is enough to get an alphabetical
+    // layout, with no need to touch transforms or card creation order.
+    [HarmonyPatch(typeof(SelectLeader), "SetLeaderPositions")]
+    internal static class LeaderSortPatch
+    {
+        private static void Prefix(SelectLeader __instance)
+        {
+            List<SelectLeader.Character> characters = Traverse.Create(__instance).Field("characters").GetValue<List<SelectLeader.Character>>();
+            if (characters == null || characters.Count == 0 || !characters[0].data.classData.name.StartsWith(CompanionStart.NamePrefix))
+            {
+                return;
+            }
+
+            CardContainer container = Traverse.Create(__instance).Field("leaderCardContainer").GetValue<CardContainer>();
+            Traverse.Create(container).Field("entities").GetValue<List<Entity>>()
+                .Sort((a, b) => string.Compare(a.data.title, b.data.title, StringComparison.OrdinalIgnoreCase));
         }
     }
 }
