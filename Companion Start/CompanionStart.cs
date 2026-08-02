@@ -133,6 +133,18 @@ namespace CompanionStart
                     CardData clone = companion.Clone();
                     clone.cardType = companionLeaderType;
                     companionLeaderCrown.Assign(clone);
+
+                    // The base game only persists a cardType override across save/load when
+                    // CardSaveData spots cardType != original.cardType at save time - but by then
+                    // this clone's "original" (see CardData.Clone) already carries the same
+                    // companionLeaderType, so that check never trips and the override is never
+                    // recorded. Without it, reloading a save resolves the card back to its vanilla
+                    // CardData (cardType "Friendly"), which Character.GetCompanionCount() then
+                    // miscounts as a companion. Stamping this customData key directly makes the
+                    // game's own OverrideCardType restore logic (CardSaveData.Load) apply
+                    // regardless, so the leader keeps its own CardType after a reload.
+                    clone.SetCustomData("OverrideCardType", companionLeaderType.name);
+
                     return clone;
                 })
                 .ToArray();
