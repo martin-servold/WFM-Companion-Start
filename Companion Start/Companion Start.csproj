@@ -367,6 +367,7 @@
   <ItemGroup>
     <Compile Include="CompanionStart.cs" />
     <Compile Include="DarkModeFlagPatch.cs" />
+    <Compile Include="InjuredCompanionPatch.cs" />
     <Compile Include="LeaderSelectionPatch.cs" />
     <Compile Include="RemoveDuplicateLeaderRewardsPatch.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
