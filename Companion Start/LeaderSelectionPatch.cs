@@ -55,17 +55,20 @@ namespace CompanionStart
             RectTransform scrollBoundsRect = (RectTransform)scrollBoundsObject.transform;
             scrollBoundsRect.sizeDelta = viewportSize;
 
-            GameObject gridObject = new GameObject("CompanionStartLeaderGrid", typeof(RectTransform), typeof(CardContainerGrid));
+            GameObject gridObject = new GameObject("CompanionStartLeaderGrid", typeof(RectTransform), typeof(GroupedLeaderGrid));
             gridObject.transform.SetParent(scrollBoundsObject.transform, false);
             gridObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
 
-            CardContainerGrid grid = gridObject.GetComponent<CardContainerGrid>();
+            CardContainerGrid grid = gridObject.GetComponent<GroupedLeaderGrid>();
             grid.holder = gridObject.GetComponent<RectTransform>();
             grid.onAdd = new UnityEventEntity();
             grid.onRemove = new UnityEventEntity();
 
+            // Default scrollAmount (1) moves one unit of content per wheel notch, which felt like
+            // it took far more scrolling than it should to get through a full companion roster.
             Scroller scroller = gridObject.GetOrAdd<Scroller>();
             scroller.bounds = scrollBoundsRect;
+            scroller.scrollAmount = 2f;
 
             containerField.SetValue(grid);
         }
