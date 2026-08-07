@@ -1,3 +1,5 @@
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -40,6 +42,13 @@ namespace CompanionStart
             companionLeaderType = Get<CardType>("Friendly").InstantiateKeepName();
             companionLeaderType.name = CompanionLeaderCardTypeName;
             companionLeaderType.miniboss = true;
+
+            // "Friendly" is the CardType ordinary, benchable companions use, so it has
+            // canReserve = true. Vanilla's own Leader CardType has it false - benching your
+            // leader isn't a valid state - but cloning Friendly here carries that true value
+            // over, which let CardControllerDeck offer "move to reserve" on companion leaders.
+            companionLeaderType.canReserve = false;
+
             AddressableLoader.AddToGroup("CardType", companionLeaderType);
 
             // CardManager builds its per-CardType render-prefab pool once, at scene start, from
@@ -87,6 +96,24 @@ namespace CompanionStart
             GameMode gameMode = Get<GameMode>(GameModeName);
             originalGameModeClasses = gameMode.classes;
             gameMode.classes = originalGameModeClasses.Concat(newClasses).ToArray();
+
+            Events.OnCampaignInit += EnsureChampionProperties;
+        }
+
+        // OnCampaignInit is a multicast delegate - only the last-invoked subscriber's returned
+        // enumerator is actually driven, so this is written as a plain method (no yield) rather
+        // than an iterator, guaranteeing it always runs regardless of subscriber order.
+        private static IEnumerator EnsureChampionProperties()
+        {
+            CardData champion = References.PlayerData?.inventory?.deck
+                ?.FirstOrDefault(card => card.cardType != null && card.cardType.miniboss);
+
+            if (champion != null && string.Equals(champion.title, "Egg", StringComparison.OrdinalIgnoreCase))
+            {
+                champion.forceTitle = "Egg, M.D.";
+            }
+
+            return null;
         }
 
         private static void AliasCardRenderPool(string newCardTypeName, string sourceCardTypeName)
@@ -154,6 +181,8 @@ namespace CompanionStart
 
         protected override void Unload()
         {
+            Events.OnCampaignInit -= EnsureChampionProperties;
+
             if (originalGameModeClasses != null)
             {
                 Get<GameMode>(GameModeName).classes = originalGameModeClasses;
