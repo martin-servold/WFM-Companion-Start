@@ -49,6 +49,11 @@ namespace CompanionStart
             // over, which let CardControllerDeck offer "move to reserve" on companion leaders.
             companionLeaderType.canReserve = false;
 
+            // Same story as canReserve above: "Friendly" allows the in-battle drag-to-discard
+            // recall (EntityExt.CanRecall gates it on cardType.canRecall), so without this,
+            // companion leaders could be dragged off the board and pulled out of the fight.
+            companionLeaderType.canRecall = false;
+
             AddressableLoader.AddToGroup("CardType", companionLeaderType);
 
             // CardManager builds its per-CardType render-prefab pool once, at scene start, from
