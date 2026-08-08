@@ -370,6 +370,7 @@
     <Compile Include="GroupedLeaderGrid.cs" />
     <Compile Include="InjuredCompanionPatch.cs" />
     <Compile Include="LeaderSelectionPatch.cs" />
+    <Compile Include="NakedGnomeSelfEncounterPatch.cs" />
     <Compile Include="RemoveDuplicateLeaderRewardsPatch.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

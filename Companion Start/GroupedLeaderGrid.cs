@@ -26,7 +26,7 @@ namespace CompanionStart
         private static readonly HashSet<string> SharedCompanionTitles = new HashSet<string>(new[]
         {
             "Big Berry", "Blunky", "Bombom", "Bonnie", "Dimona", "Foxee", "Gojiber",
-            "Jumbo", "Lupa", "Nova", "Roibos", "Snobble", "Snoffel"
+            "Jumbo", "Lupa", "Naked Gnome", "Nova", "Roibos", "Snobble", "Snoffel"
         }, StringComparer.OrdinalIgnoreCase);
 
         // Expressed as a fraction of one row's pitch (cellSize + spacing) rather than a whole

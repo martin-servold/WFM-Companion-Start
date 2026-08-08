@@ -25,6 +25,11 @@ namespace CompanionStart
 
         private static readonly string[] SourceClassNames = { "Basic", "Clunk", "Magic" };
 
+        // Naked Gnome isn't drawn from any clan's normal "Units" reward pool - he's only ever
+        // obtained by sparing the enemy card "NakedGnome" in the run's first battle - so he needs
+        // to be added to the companion pool explicitly rather than falling out of the scrape below.
+        private static readonly string[] SituationalCompanionNames = { "NakedGnomeFriendly" };
+
         private CardType companionLeaderType;
         private CardUpgradeData companionLeaderCrown;
         private ClassData[] newClasses;
@@ -160,6 +165,9 @@ namespace CompanionStart
                 .Where(pool => pool.type == "Units")
                 .SelectMany(pool => pool.list)
                 .OfType<CardData>()
+                .Concat(SituationalCompanionNames.Select(name => Get<CardData>(name)))
+                .GroupBy(companion => companion.name)
+                .Select(group => group.First())
                 .Select(companion =>
                 {
                     CardData clone = companion.Clone();
