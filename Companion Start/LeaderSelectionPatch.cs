@@ -74,6 +74,45 @@ namespace CompanionStart
         }
     }
 
+    // FlipUpLeaders' own FlipUpRoutine flips one card at a time with a small random delay between
+    // each - barely noticeable for 3 vanilla leaders, but once a clan's roster runs into the
+    // dozens (companions ~25, monsters 62) that staggered TL-BR sweep becomes a real multi-second
+    // wait. Flipping every card in the same frame instead avoids re-implementing FlipUpRoutine's
+    // own private staggering loop just to skip the delay in it.
+    [HarmonyPatch(typeof(SelectLeader), nameof(SelectLeader.FlipUpLeaders))]
+    internal static class InstantLeaderFlipPatch
+    {
+        private static bool Prefix(SelectLeader __instance)
+        {
+            CardContainer leaderCardContainer = Traverse.Create(__instance).Field("leaderCardContainer").GetValue<CardContainer>();
+            foreach (Entity entity in leaderCardContainer)
+            {
+                entity.flipper.FlipUp(force: true);
+            }
+
+            return false;
+        }
+    }
+
+    // GenerateLeaders can now take several frames per card (creating each CardData, then applying
+    // status effects/upgrades via Card.UpdateData) instead of finishing near-instantly - for the
+    // 62-leader monster clans that's long enough that a player hitting "back" mid-generation is a
+    // real scenario, not just a theoretical one. CharacterSelectScreen.Back -> SelectLeader.Cancel
+    // destroys every leader entity/CardData created so far, including ones still mid-UpdateData -
+    // so those suspended coroutines resume next frame against now-destroyed objects and throw
+    // (NullReferenceException in UnityEngine.Object.get_name, UpgradeHolder.Clear, etc.).
+    // SelectLeader already tracks exactly this window via its public `generating` flag (Reroll()
+    // guards on it for the same reason) - Back() just never checked it.
+    [HarmonyPatch(typeof(CharacterSelectScreen), nameof(CharacterSelectScreen.Back))]
+    internal static class PreventBackDuringGenerationPatch
+    {
+        private static bool Prefix(CharacterSelectScreen __instance)
+        {
+            SelectLeader leaderSelection = Traverse.Create(__instance).Field("leaderSelection").GetValue<SelectLeader>();
+            return !leaderSelection || !leaderSelection.generating;
+        }
+    }
+
     // SelectLeader.GenerateLeaders draws every leader from a shuffled LeaderPool, so with the
     // full-roster fix above, companions would otherwise show up in random order each visit.
     // SetLeaderPositions runs once after all leaders for this screen are created and right before

@@ -15,7 +15,6 @@ namespace CompanionStart
     [HarmonyPatch(typeof(SelectTribe), nameof(SelectTribe.Run))]
     internal static class DarkModeFlagPatch
     {
-        private static readonly Color DarkTint = new Color(0.5f, 0.5f, 0.65f, 1f);
         private static readonly FieldInfo BaseColourField = typeof(ButtonAnimator).GetField("baseColour", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseColourSetField = typeof(ButtonAnimator).GetField("baseColourSet", BindingFlags.NonPublic | BindingFlags.Instance);
 
@@ -27,7 +26,7 @@ namespace CompanionStart
 
             for (int i = 0; i < tribes.Count && i < tribeFlagGroup.childCount; i++)
             {
-                if (!tribes[i].name.StartsWith(CompanionStart.NamePrefix))
+                if (!CompanionStart.FlagTints.TryGetValue(tribes[i].name, out Color tint))
                 {
                     continue;
                 }
@@ -39,7 +38,7 @@ namespace CompanionStart
                     continue;
                 }
 
-                display.flagImage.color = DarkTint;
+                display.flagImage.color = tint;
 
                 // ButtonAnimator caches whatever color the image had the first time it hovers
                 // into a private baseColour field, then restores that cached value on unhover -
@@ -50,12 +49,12 @@ namespace CompanionStart
                 ButtonAnimator buttonAnimator = flagTransform.GetComponentInChildren<ButtonAnimator>();
                 if (buttonAnimator != null)
                 {
-                    BaseColourField.SetValue(buttonAnimator, DarkTint);
+                    BaseColourField.SetValue(buttonAnimator, tint);
                     BaseColourSetField.SetValue(buttonAnimator, true);
                     buttonAnimator.highlightColour = new Color(
-                        buttonAnimator.highlightColour.r * DarkTint.r,
-                        buttonAnimator.highlightColour.g * DarkTint.g,
-                        buttonAnimator.highlightColour.b * DarkTint.b,
+                        buttonAnimator.highlightColour.r * tint.r,
+                        buttonAnimator.highlightColour.g * tint.g,
+                        buttonAnimator.highlightColour.b * tint.b,
                         buttonAnimator.highlightColour.a);
                 }
             }

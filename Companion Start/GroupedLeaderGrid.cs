@@ -23,10 +23,16 @@ namespace CompanionStart
     // into the single "rest" group - identical to plain CardContainerGrid.
     internal class GroupedLeaderGrid : CardContainerGrid
     {
+        // Deliberately excludes Naked Gnome even though he's shared across all three companion
+        // clans same as everything else here: he's also shared across all three monster clans
+        // (100% overlap there, unlike the partial overlap this list is meant to isolate), and this
+        // set applies globally to every clan's grid - adding him here would make him the one
+        // "shared" entry among 61 otherwise-unique ones in each monster clan, splitting him off
+        // into his own stray cluster there instead of just sitting in the block with everyone else.
         private static readonly HashSet<string> SharedCompanionTitles = new HashSet<string>(new[]
         {
             "Big Berry", "Blunky", "Bombom", "Bonnie", "Dimona", "Foxee", "Gojiber",
-            "Jumbo", "Lupa", "Naked Gnome", "Nova", "Roibos", "Snobble", "Snoffel"
+            "Jumbo", "Lupa", "Nova", "Roibos", "Snobble", "Snoffel"
         }, StringComparer.OrdinalIgnoreCase);
 
         // Expressed as a fraction of one row's pitch (cellSize + spacing) rather than a whole

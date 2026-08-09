@@ -14,9 +14,9 @@ namespace CompanionStart
         public CompanionStart(string modDirectory) : base(modDirectory) { }
 
         public override string GUID => "fuko.wildfrost.companionstart";
-        public override string[] Depends => new string[] { "hope.wildfrost.extendedui" };
+        public override string[] Depends => new string[] { };
         public override string Title => "Companion Start";
-        public override string Description => "Adds new clans made up entirely of the game's companions as selectable leaders.";
+        public override string Description => "Adds new clans made up of the game's companions and monsters as selectable leaders.";
 
         internal const string NamePrefix = "fuko.wildfrost.companionstart.";
         internal const string CompanionLeaderCardTypeName = NamePrefix + "CompanionLeader";
@@ -30,6 +30,33 @@ namespace CompanionStart
         // to be added to the companion pool explicitly rather than falling out of the scrape below.
         private static readonly string[] SituationalCompanionNames = { "NakedGnomeFriendly" };
 
+        // Every non-boss enemy in the game. Unlike companions, enemies aren't tied to any
+        // particular clan's own reward pool at all, so all three monster clans below get this
+        // exact same roster rather than each drawing from a different natural source.
+        private static readonly string[] EnemyLeaderNames =
+        {
+            "BabySnowbo", "Beeberry", "BerryWitch", "Smakk", "Sheep", "BulbHead", "Burster", "Chungoon", "Conker", "Smash",
+            "BerryMonster", "Frostinger", "Gobbler", "Gobling", "Smackgoon", "Gok", "Grink", "Sno", "Grog", "Noodle",
+            "Grouchy", "Chunky", "SBelly", "SMime", "Wildling", "JabJoat", "Blockhead", "Kraken", "Icemason", "Lump",
+            "Makoko", "Spyke", "Minimoko", "NakedGnome", "Kalamari", "OobaBear", "Stinghorn", "Pecan", "Pengoon", "PepperWitch",
+            "Berro", "Popshroom", "Sporkypine", "Prickle", "Puffball", "Pygmy", "Wally", "ShellWitch", "ShroomGobbler", "Shrootles",
+            "Confuddler", "SnowGobbler", "Snowbirb", "Snowbo", "Spuncher", "Voido", "Waddlegoons", "Wrecker", "Snoolf", "Burner",
+            "SnormWorm", "WoollyDrek"
+        };
+
+        // Strongly saturated toward one hue each (rather than the near-neutral greys tried
+        // first) so both read clearly against vanilla's blue/teal/orange flags and against
+        // each other, even at a glance across a 3x3 grid.
+        private static readonly Color CompanionFlagTint = new Color(1f, 0.85f, 0.35f, 1f);
+        private static readonly Color MonsterFlagTint = new Color(1f, 0.3f, 0.3f, 1f);
+
+        // Keyed by ClassData.name so DarkModeFlagPatch can tell the two categories of clan apart
+        // on the tribe-select screen without needing to know our naming/suffix conventions itself.
+        internal static readonly Dictionary<string, Color> FlagTints = new Dictionary<string, Color>();
+
+        // Used for both companion and monster leaders - the CardType/Crown only mark "this card
+        // is a player-controlled leader", which is meaningless with respect to where the
+        // underlying CardData originally came from.
         private CardType companionLeaderType;
         private CardUpgradeData companionLeaderCrown;
         private ClassData[] newClasses;
@@ -97,7 +124,21 @@ namespace CompanionStart
 
             AddressableLoader.AddToGroup("CardUpgradeData", companionLeaderCrown);
 
-            newClasses = SourceClassNames.Select(BuildCompanionClass).ToArray();
+            ClassData[] companionClasses = SourceClassNames
+                .Select(sourceName => BuildLeaderClass(sourceName, "Companions", CompanionFlagTint, source =>
+                    source.rewardPools
+                        .Where(pool => pool.type == "Units")
+                        .SelectMany(pool => pool.list)
+                        .OfType<CardData>()
+                        .Concat(SituationalCompanionNames.Select(TryGetCardData))))
+                .ToArray();
+
+            ClassData[] monsterClasses = SourceClassNames
+                .Select(sourceName => BuildLeaderClass(sourceName, "Monsters", MonsterFlagTint, source =>
+                    EnemyLeaderNames.Select(TryGetCardData)))
+                .ToArray();
+
+            newClasses = companionClasses.Concat(monsterClasses).ToArray();
             foreach (ClassData newClass in newClasses)
             {
                 AddressableLoader.AddToGroup("ClassData", newClass);
@@ -108,6 +149,7 @@ namespace CompanionStart
             gameMode.classes = originalGameModeClasses.Concat(newClasses).ToArray();
 
             Events.OnCampaignInit += EnsureChampionProperties;
+            Events.OnSceneChanged += TribeFlagGridPatch.OnSceneChanged;
         }
 
         // OnCampaignInit is a multicast delegate - only the last-invoked subscriber's returned
@@ -121,6 +163,10 @@ namespace CompanionStart
             if (champion != null && string.Equals(champion.title, "Egg", StringComparison.OrdinalIgnoreCase))
             {
                 champion.forceTitle = "Egg, M.D.";
+            }
+            else if (champion != null && string.Equals(champion.title, "Beeberry", StringComparison.OrdinalIgnoreCase))
+            {
+                champion.forceTitle = "Peeberry";
             }
 
             return null;
@@ -149,52 +195,73 @@ namespace CompanionStart
             }
         }
 
-        // Builds a brand-new companion-only clan mirroring an existing one (same starting
-        // deck/reward pools/flag/character prefab), instead of mutating the original clan.
-        private ClassData BuildCompanionClass(string sourceName)
+        // Looks up a CardData by name defensively - used for the hand-maintained situational
+        // companion and enemy-leader name lists below, where a single typo shouldn't be able to
+        // take down the whole mod's Load() with an AddressableLoader exception.
+        private CardData TryGetCardData(string name)
+        {
+            try
+            {
+                return Get<CardData>(name);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"CompanionStart: couldn't load CardData \"{name}\" - skipping. {ex.Message}");
+                return null;
+            }
+        }
+
+        // Builds a brand-new clan mirroring an existing one (same starting deck/reward
+        // pools/flag/character prefab) but with its own leader roster, instead of mutating the
+        // original clan. Used for both the companion and monster clans - only the roster source,
+        // name suffix, and flag tint differ between them.
+        private ClassData BuildLeaderClass(string sourceName, string suffix, Color flagTint, Func<ClassData, IEnumerable<CardData>> rosterSelector)
         {
             ClassData source = Get<ClassData>(sourceName);
 
-            ClassData companionClass = source.InstantiateKeepName();
-            companionClass.name = NamePrefix + sourceName + "Companions";
-            companionClass.id = companionClass.name;
+            ClassData leaderClass = source.InstantiateKeepName();
+            leaderClass.name = NamePrefix + sourceName + suffix;
+            leaderClass.id = leaderClass.name;
             // Flag stays as the original clan's here - DarkModeFlagPatch tints it on the
             // tribe-select screen instead (see that file for why it isn't done here).
 
-            companionClass.leaders = source.rewardPools
-                .Where(pool => pool.type == "Units")
-                .SelectMany(pool => pool.list)
-                .OfType<CardData>()
-                .Concat(SituationalCompanionNames.Select(name => Get<CardData>(name)))
+            leaderClass.leaders = rosterSelector(source)
+                .Where(companion => companion != null)
                 .GroupBy(companion => companion.name)
                 .Select(group => group.First())
-                .Select(companion =>
-                {
-                    CardData clone = companion.Clone();
-                    clone.cardType = companionLeaderType;
-                    companionLeaderCrown.Assign(clone);
-
-                    // The base game only persists a cardType override across save/load when
-                    // CardSaveData spots cardType != original.cardType at save time - but by then
-                    // this clone's "original" (see CardData.Clone) already carries the same
-                    // companionLeaderType, so that check never trips and the override is never
-                    // recorded. Without it, reloading a save resolves the card back to its vanilla
-                    // CardData (cardType "Friendly"), which Character.GetCompanionCount() then
-                    // miscounts as a companion. Stamping this customData key directly makes the
-                    // game's own OverrideCardType restore logic (CardSaveData.Load) apply
-                    // regardless, so the leader keeps its own CardType after a reload.
-                    clone.SetCustomData("OverrideCardType", companionLeaderType.name);
-
-                    return clone;
-                })
+                .Select(CloneAsLeader)
                 .ToArray();
 
-            return companionClass;
+            FlagTints[leaderClass.name] = flagTint;
+
+            return leaderClass;
+        }
+
+        private CardData CloneAsLeader(CardData companion)
+        {
+            CardData clone = companion.Clone();
+            clone.cardType = companionLeaderType;
+            companionLeaderCrown.Assign(clone);
+
+            // The base game only persists a cardType override across save/load when
+            // CardSaveData spots cardType != original.cardType at save time - but by then
+            // this clone's "original" (see CardData.Clone) already carries the same
+            // companionLeaderType, so that check never trips and the override is never
+            // recorded. Without it, reloading a save resolves the card back to its vanilla
+            // CardData (e.g. cardType "Friendly" or "Enemy"), which Character.GetCompanionCount()
+            // then miscounts as a companion. Stamping this customData key directly makes the
+            // game's own OverrideCardType restore logic (CardSaveData.Load) apply regardless, so
+            // the leader keeps its own CardType after a reload.
+            clone.SetCustomData("OverrideCardType", companionLeaderType.name);
+
+            return clone;
         }
 
         protected override void Unload()
         {
             Events.OnCampaignInit -= EnsureChampionProperties;
+            Events.OnSceneChanged -= TribeFlagGridPatch.OnSceneChanged;
+            FlagTints.Clear();
 
             if (originalGameModeClasses != null)
             {
