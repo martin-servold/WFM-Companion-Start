@@ -369,6 +369,7 @@
     <Compile Include="DarkModeFlagPatch.cs" />
     <Compile Include="GroupedLeaderGrid.cs" />
     <Compile Include="InjuredCompanionPatch.cs" />
+    <Compile Include="LeaderCannotFleePatch.cs" />
     <Compile Include="LeaderSelectionPatch.cs" />
     <Compile Include="NakedGnomeSelfEncounterPatch.cs" />
     <Compile Include="RemoveDuplicateLeaderRewardsPatch.cs" />
