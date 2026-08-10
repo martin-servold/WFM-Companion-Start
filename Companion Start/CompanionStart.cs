@@ -61,6 +61,7 @@ namespace CompanionStart
         private CardUpgradeData companionLeaderCrown;
         private ClassData[] newClasses;
         private ClassData[] originalGameModeClasses;
+        private Dictionary<StatusEffectData, TargetConstraint[]> originalEatConstraints;
 
         protected override void Load()
         {
@@ -150,6 +151,39 @@ namespace CompanionStart
 
             Events.OnCampaignInit += EnsureChampionProperties;
             Events.OnSceneChanged += TribeFlagGridPatch.OnSceneChanged;
+
+            FixEatAbilitySelfCheck();
+        }
+
+        // "Eat something" abilities (e.g. WoollyDrek's "Eat and Absorb a random ally") are built
+        // as a self-targeting trigger: the outer effect hits its own owner just to carry
+        // effectToApply (a StatusEffectInstantEatSomething) onto them, and THAT effect does the
+        // real, separate targeting (Targets.Get, correctly excluding the caster). Some of these
+        // effects also carry an "Is Not Miniboss" constraint meant only to stop them from eating a
+        // miniboss ally - but that same targetConstraints list gets reused, unintentionally, as a
+        // gate on whether the self-triggering carrier hit can even be applied to its own owner in
+        // the first place (StatusEffectSystem.Apply and StatusEffectApplyX.CanAffect both check it
+        // against the entity the hit targets, which for the carrier hit is the caster itself).
+        // Harmless for a normal enemy, but any of our monster-leader clones IS miniboss-flagged
+        // (that's how the leader mechanic works) - so it fails its own gate against itself and the
+        // whole ability silently no-ops with no animation and no error.
+        //
+        // A real eat-target candidate being a miniboss essentially never happens in practice (the
+        // player's own leader is the only miniboss on their side), so stripping just that one
+        // constraint from any "eat something" effect is a safe, minimal fix - and it resolves the
+        // self-gate at every call site that reuses the list, rather than needing to patch each one.
+        private void FixEatAbilitySelfCheck()
+        {
+            originalEatConstraints = new Dictionary<StatusEffectData, TargetConstraint[]>();
+            foreach (StatusEffectData effect in AddressableLoader.GetGroup<StatusEffectData>("StatusEffectData"))
+            {
+                if (effect is StatusEffectInstantEatSomething && effect.targetConstraints != null
+                    && effect.targetConstraints.Any(c => c.name == "Is Not Miniboss"))
+                {
+                    originalEatConstraints[effect] = effect.targetConstraints;
+                    effect.targetConstraints = effect.targetConstraints.Where(c => c.name != "Is Not Miniboss").ToArray();
+                }
+            }
         }
 
         // OnCampaignInit is a multicast delegate - only the last-invoked subscriber's returned
@@ -262,6 +296,15 @@ namespace CompanionStart
             Events.OnCampaignInit -= EnsureChampionProperties;
             Events.OnSceneChanged -= TribeFlagGridPatch.OnSceneChanged;
             FlagTints.Clear();
+
+            if (originalEatConstraints != null)
+            {
+                foreach (KeyValuePair<StatusEffectData, TargetConstraint[]> pair in originalEatConstraints)
+                {
+                    pair.Key.targetConstraints = pair.Value;
+                }
+                originalEatConstraints = null;
+            }
 
             if (originalGameModeClasses != null)
             {
