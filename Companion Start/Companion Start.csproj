@@ -367,6 +367,7 @@
   <ItemGroup>
     <Compile Include="CompanionStart.cs" />
     <Compile Include="DarkModeFlagPatch.cs" />
+    <Compile Include="EatSelfTriggerPatch.cs" />
     <Compile Include="GroupedLeaderGrid.cs" />
     <Compile Include="InjuredCompanionPatch.cs" />
     <Compile Include="LeaderCannotFleePatch.cs" />
