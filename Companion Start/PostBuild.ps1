@@ -15,7 +15,14 @@ Copy-Item -Path $IconPath -Destination $ModRoot -Force
 # subfolder so it always matches what was just built, without bin/obj/.vs churn or
 # stale files left over from earlier ad-hoc copies.
 $sourceDest = Join-Path $ModRoot "Source"
-robocopy $SolutionDir $sourceDest /MIR /XD bin obj .vs .git /NFL /NDL /NJH /NJS /NC /NS
-if ($LASTEXITCODE -ge 8) {
-    throw "robocopy failed with exit code $LASTEXITCODE while mirroring source to $sourceDest"
+$excludedDirectories = @("bin", "obj", ".vs", ".git")
+if (Test-Path $sourceDest) {
+    Remove-Item $sourceDest -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $sourceDest | Out-Null
+Get-ChildItem -Path $SolutionDir -Force | Where-Object {
+    $_.Name -notin $excludedDirectories
+} | Copy-Item -Destination $sourceDest -Recurse -Force
+if (-not (Test-Path $sourceDest)) {
+    throw "Failed to mirror source to $sourceDest"
 }

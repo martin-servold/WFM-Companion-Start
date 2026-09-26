@@ -20,6 +20,11 @@ namespace CompanionStart
 
         internal const string NamePrefix = "fuko.wildfrost.companionstart.";
         internal const string CompanionLeaderCardTypeName = NamePrefix + "CompanionLeader";
+        internal const string ClunkerLeaderCardTypeName = NamePrefix + "ClunkerLeader";
+        internal const string ClunkerLeaderMarker = NamePrefix + "ClunkerLeader";
+        internal const string TallLeaderMarker = NamePrefix + "TallLeader";
+        private const int BossLeaderHealthCap = 12;
+        private const string NomAndStompyTitle = "Nom & Stompy";
         private const string CompanionLeaderCrownName = NamePrefix + "CompanionLeaderCrown";
         private const string GameModeName = "GameModeNormal";
 
@@ -44,6 +49,24 @@ namespace CompanionStart
             "SnormWorm", "WoollyDrek"
         };
 
+        // Bosses are kept separate from ordinary enemies so they can be shown as their own
+        // group in each of the three monster leader clans.
+        internal static readonly HashSet<string> BossLeaderNames = new HashSet<string>(new[]
+        {
+            "Bamboozle", "BigPeng", "Blot", "Bogberry", "Bolgo", "Bomber", "Bumbo", "CrazyEyes",
+            "Frosty", "GukaGuka", "Gunkback", "Infernoko", "MonkeyKing", "Muttonhead", "Numskull",
+            "Smosh", "SnowKnight", "Toothless", "Truffle", "Turnip", "VeiledLady",
+            "ClunkerBoss", "ClunkerBoss2", "FinalBoss", "FinalBoss2", "FrenzyBoss", "FrenzyBoss2",
+            "GuardianGnome", "SplitBoss", "SplitBoss1", "SplitBoss2", "SummonBoss", "SummonBoss2",
+            "SummonBoss3", "TrueFinalBoss1", "TrueFinalBoss2", "TrueFinalBoss3", "TrueFinalBoss4",
+            "TrueFinalBoss5", "TrueFinalBoss6"
+        }, StringComparer.OrdinalIgnoreCase);
+
+        internal static readonly HashSet<string> TallLeaderNames = new HashSet<string>(new[]
+        {
+            "SplitBoss", "FrenzyBoss", "FrenzyBoss2", "ClunkerBoss", "ClunkerBoss2", "SummonBoss"
+        }, StringComparer.OrdinalIgnoreCase);
+
         // Strongly saturated toward one hue each (rather than the near-neutral greys tried
         // first) so both read clearly against vanilla's blue/teal/orange flags and against
         // each other, even at a glance across a 3x3 grid.
@@ -58,6 +81,7 @@ namespace CompanionStart
         // is a player-controlled leader", which is meaningless with respect to where the
         // underlying CardData originally came from.
         private CardType companionLeaderType;
+        private CardType clunkerLeaderType;
         private CardUpgradeData companionLeaderCrown;
         private ClassData[] newClasses;
         private ClassData[] originalGameModeClasses;
@@ -88,6 +112,13 @@ namespace CompanionStart
 
             AddressableLoader.AddToGroup("CardType", companionLeaderType);
 
+            clunkerLeaderType = Get<CardType>("Clunker").InstantiateKeepName();
+            clunkerLeaderType.name = ClunkerLeaderCardTypeName;
+            clunkerLeaderType.miniboss = true;
+            clunkerLeaderType.canReserve = false;
+            clunkerLeaderType.canRecall = false;
+            AddressableLoader.AddToGroup("CardType", clunkerLeaderType);
+
             // CardManager builds its per-CardType render-prefab pool once, at scene start, from
             // whatever CardTypes exist in the "CardType" group at that moment - which happens
             // before this mod's Load() runs. A CardType added afterwards never gets a pool entry
@@ -95,6 +126,7 @@ namespace CompanionStart
             // used. Since our clone shares "Friendly"'s prefab exactly, it's safe to just alias
             // its pool keys onto Friendly's already-built pools instead of constructing new ones.
             AliasCardRenderPool(companionLeaderType.name, "Friendly");
+            AliasCardRenderPool(clunkerLeaderType.name, "Clunker");
 
             // Vanilla leaders carry a CardUpgradeData with type == Crown - that's what
             // Battle.DrawChampions pulls into the opening hand and PlayCrownCardsFirstSystem
@@ -130,12 +162,24 @@ namespace CompanionStart
                         .Where(pool => pool.type == "Units")
                         .SelectMany(pool => pool.list)
                         .OfType<CardData>()
-                        .Concat(SituationalCompanionNames.Select(TryGetCardData))))
+                        .Concat(source.rewardPools
+                            .Where(pool => pool.type == "Items")
+                            .SelectMany(pool => pool.list)
+                            .OfType<CardData>()
+                            .Where(card => card.IsClunker))
+                        .Concat(SituationalCompanionNames.Select(TryGetCardData))
+                        .Where(card => card != null)
+                        .GroupBy(GetRosterIdentity)
+                        .Select(SelectPreferredRosterCard)))
                 .ToArray();
 
             ClassData[] monsterClasses = SourceClassNames
                 .Select(sourceName => BuildLeaderClass(sourceName, "Monsters", MonsterFlagTint, source =>
-                    EnemyLeaderNames.Select(TryGetCardData)))
+                    EnemyLeaderNames.Select(TryGetCardData)
+                        .Concat(BossLeaderNames.Select(TryGetCardData).Where(card => !IsFriendOnlyCard(card)))
+                        .Where(card => card != null)
+                        .GroupBy(GetRosterIdentity)
+                        .Select(SelectPreferredRosterCard)))
                 .ToArray();
 
             newClasses = companionClasses.Concat(monsterClasses).ToArray();
@@ -150,6 +194,8 @@ namespace CompanionStart
 
             Events.OnCampaignInit += EnsureChampionProperties;
             Events.OnSceneChanged += TribeFlagGridPatch.OnSceneChanged;
+            Events.OnEntityMove += TallLeaderPatch.OnEntityMove;
+            Events.OnCheckAction += TallLeaderPatch.OnCheckAction;
         }
 
         // OnCampaignInit is a multicast delegate - only the last-invoked subscriber's returned
@@ -211,6 +257,61 @@ namespace CompanionStart
             }
         }
 
+        private static bool IsFriendOnlyCard(CardData card)
+        {
+            return card != null && string.Equals(card.title, NomAndStompyTitle, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetRosterIdentity(CardData card)
+        {
+            if (string.Equals(card.title, "Truffle", StringComparison.OrdinalIgnoreCase)
+                || card.name.StartsWith("Truffle", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Truffle";
+            }
+
+            return card.name;
+        }
+
+        private static CardData SelectPreferredRosterCard(IEnumerable<CardData> cards)
+        {
+            return cards
+                .OrderByDescending(card => TallLeaderNames.Contains(card.name))
+                .ThenByDescending(card => card.hp)
+                .First();
+        }
+
+        private static bool IsBossCard(CardData card)
+        {
+            return card != null
+                && BossLeaderNames.Contains(card.name)
+                && !IsFriendOnlyCard(card);
+        }
+
+        private static bool IsPhaseChangeStatus(StatusEffectData status)
+        {
+            if (status == null)
+            {
+                return false;
+            }
+
+            return new[] { status.name, status.type, status.keyword }
+                .Any(value => !string.IsNullOrEmpty(value)
+                    && (value.IndexOf("nextphase", StringComparison.OrdinalIgnoreCase) >= 0
+                        || value.IndexOf("next phase", StringComparison.OrdinalIgnoreCase) >= 0));
+        }
+
+        private static void NormalizeBossLeader(CardData card)
+        {
+            card.hp = Math.Min(card.hp, BossLeaderHealthCap);
+            if (card.startWithEffects != null)
+            {
+                card.startWithEffects = card.startWithEffects
+                    .Where(effect => !IsPhaseChangeStatus(effect.data))
+                    .ToArray();
+            }
+        }
+
         // Builds a brand-new clan mirroring an existing one (same starting deck/reward
         // pools/flag/character prefab) but with its own leader roster, instead of mutating the
         // original clan. Used for both the companion and monster clans - only the roster source,
@@ -239,9 +340,29 @@ namespace CompanionStart
 
         private CardData CloneAsLeader(CardData companion)
         {
-            CardData clone = companion.Clone();
-            clone.cardType = companionLeaderType;
+            bool isClunker = companion.IsClunker;
+            bool isBoss = IsBossCard(companion);
+            // Matched by name only - the small Truffles (SummonBoss2/3) share Truffle Prime's
+            // title, but only Truffle Prime itself (SummonBoss) takes two slots.
+            bool isTall = TallLeaderNames.Contains(companion.name);
+            CardData clone = companion.Clone(!isBoss);
+            clone.cardType = isClunker ? clunkerLeaderType : companionLeaderType;
             companionLeaderCrown.Assign(clone);
+
+            if (isBoss)
+            {
+                NormalizeBossLeader(clone);
+            }
+
+            if (isClunker)
+            {
+                clone.SetCustomData(ClunkerLeaderMarker, true);
+            }
+
+            if (isTall)
+            {
+                clone.SetCustomData(TallLeaderMarker, true);
+            }
 
             // The base game only persists a cardType override across save/load when
             // CardSaveData spots cardType != original.cardType at save time - but by then
@@ -252,7 +373,7 @@ namespace CompanionStart
             // then miscounts as a companion. Stamping this customData key directly makes the
             // game's own OverrideCardType restore logic (CardSaveData.Load) apply regardless, so
             // the leader keeps its own CardType after a reload.
-            clone.SetCustomData("OverrideCardType", companionLeaderType.name);
+            clone.SetCustomData("OverrideCardType", clone.cardType.name);
 
             return clone;
         }
@@ -261,6 +382,8 @@ namespace CompanionStart
         {
             Events.OnCampaignInit -= EnsureChampionProperties;
             Events.OnSceneChanged -= TribeFlagGridPatch.OnSceneChanged;
+            Events.OnEntityMove -= TallLeaderPatch.OnEntityMove;
+            Events.OnCheckAction -= TallLeaderPatch.OnCheckAction;
             FlagTints.Clear();
 
             if (originalGameModeClasses != null)
@@ -280,6 +403,12 @@ namespace CompanionStart
             {
                 AddressableLoader.RemoveFromGroup("CardType", companionLeaderType);
                 RemoveCardRenderPoolAlias(companionLeaderType.name);
+            }
+
+            if (clunkerLeaderType != null)
+            {
+                AddressableLoader.RemoveFromGroup("CardType", clunkerLeaderType);
+                RemoveCardRenderPoolAlias(clunkerLeaderType.name);
             }
 
             if (companionLeaderCrown != null)

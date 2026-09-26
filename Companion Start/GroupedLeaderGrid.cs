@@ -10,7 +10,7 @@ namespace CompanionStart
     // CardContainerGrid lays every card out as one contiguous block - GetChildPosition derives
     // row/column purely from each card's index in the "entities" list, and the private SetSize
     // it calls on add/remove sizes the grid the same way. To show the companions shared between
-    // multiple clans as a visually separate cluster (with a blank row between them and the rest),
+    // multiple clans as visually separate clusters (with blank rows between them and the rest),
     // that same math needs to run independently per group, offsetting the second group's rows by
     // however many the first group used. The private fields it depends on (cellSize, spacing,
     // columnCount) aren't visible to a subclass, so they're read once via Traverse - the same
@@ -24,11 +24,11 @@ namespace CompanionStart
     internal class GroupedLeaderGrid : CardContainerGrid
     {
         // Deliberately excludes Naked Gnome even though he's shared across all three companion
-        // clans same as everything else here: he's also shared across all three monster clans
-        // (100% overlap there, unlike the partial overlap this list is meant to isolate), and this
-        // set applies globally to every clan's grid - adding him here would make him the one
-        // "shared" entry among 61 otherwise-unique ones in each monster clan, splitting him off
-        // into his own stray cluster there instead of just sitting in the block with everyone else.
+            // clans same as everything else here: he's also shared across all three monster clans
+            // (100% overlap there, unlike the partial overlap this list is meant to isolate), and this
+            // set applies globally to every clan's grid - adding him here would make him the one
+            // "shared" entry among the otherwise-unique ones in each monster clan, splitting him off
+            // into his own stray cluster there instead of just sitting in the block with everyone else.
         private static readonly HashSet<string> SharedCompanionTitles = new HashSet<string>(new[]
         {
             "Big Berry", "Blunky", "Bombom", "Bonnie", "Dimona", "Foxee", "Gojiber",
@@ -67,9 +67,32 @@ namespace CompanionStart
             return this.Where(IsShared).ToList();
         }
 
+        private static bool IsBoss(Entity entity)
+        {
+            return CompanionStart.BossLeaderNames.Contains(entity.data.name)
+                && !string.Equals(entity.data.title, "Nom & Stompy", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsClunker(Entity entity)
+        {
+            return !IsBoss(entity)
+                && entity.data.TryGetCustomData(CompanionStart.ClunkerLeaderMarker, out bool isClunker, false)
+                && isClunker;
+        }
+
+        private List<Entity> BossEntities()
+        {
+            return this.Where(IsBoss).ToList();
+        }
+
+        private List<Entity> ClunkerEntities()
+        {
+            return this.Where(IsClunker).ToList();
+        }
+
         private List<Entity> RestEntities()
         {
-            return this.Where(e => !IsShared(e)).ToList();
+            return this.Where(e => !IsShared(e) && !IsBoss(e) && !IsClunker(e)).ToList();
         }
 
         private int RowsUsedBy(int count)
@@ -85,13 +108,29 @@ namespace CompanionStart
         public override Vector3 GetChildPosition(Entity child)
         {
             List<Entity> shared = SharedEntities();
+            List<Entity> bosses = BossEntities();
+            List<Entity> clunkers = ClunkerEntities();
             bool isShared = shared.Contains(child);
-            List<Entity> group = isShared ? shared : RestEntities();
+            bool isBoss = bosses.Contains(child);
+            bool isClunker = clunkers.Contains(child);
+            List<Entity> group = isShared ? shared : isBoss ? bosses : isClunker ? clunkers : RestEntities();
             int localIndex = group.IndexOf(child);
             int col = localIndex % gridColumnCount;
             int localRow = localIndex / gridColumnCount;
             int rowSize = RowCountInGroup(group.Count, gridColumnCount, localRow);
-            float rowOffset = isShared ? 0f : RowsUsedBy(shared.Count) + (shared.Count > 0 ? GapFraction : 0f);
+            float rowOffset = 0f;
+            if (!isShared)
+            {
+                rowOffset += RowsUsedBy(shared.Count) + (shared.Count > 0 ? GapFraction : 0f);
+            }
+            if (!isShared && !isBoss)
+            {
+                rowOffset += RowsUsedBy(bosses.Count) + (bosses.Count > 0 ? GapFraction : 0f);
+            }
+            if (!isShared && !isBoss && !isClunker)
+            {
+                rowOffset += RowsUsedBy(clunkers.Count) + (clunkers.Count > 0 ? GapFraction : 0f);
+            }
             float row = localRow + rowOffset;
 
             float rowWidth = rowSize * gridCellSize.x + (rowSize - 1) * gridSpacing.x;
@@ -123,8 +162,13 @@ namespace CompanionStart
         private void FixSize()
         {
             int sharedCount = SharedEntities().Count;
-            int restCount = Count - sharedCount;
-            float totalRows = RowsUsedBy(sharedCount) + (sharedCount > 0 && restCount > 0 ? GapFraction : 0f) + RowsUsedBy(restCount);
+            int bossCount = BossEntities().Count;
+            int clunkerCount = ClunkerEntities().Count;
+            int restCount = Count - sharedCount - bossCount - clunkerCount;
+            int nonEmptyGroups = (sharedCount > 0 ? 1 : 0) + (bossCount > 0 ? 1 : 0)
+                + (clunkerCount > 0 ? 1 : 0) + (restCount > 0 ? 1 : 0);
+            float totalRows = RowsUsedBy(sharedCount) + RowsUsedBy(bossCount) + RowsUsedBy(clunkerCount) + RowsUsedBy(restCount)
+                + Mathf.Max(0, nonEmptyGroups - 1) * GapFraction;
             int columns = Mathf.Min(gridColumnCount, Count);
             float width = columns * gridCellSize.x + Mathf.Max(0, columns - 1) * gridSpacing.x;
             float height = totalRows * gridCellSize.y + Mathf.Max(0, totalRows - 1) * gridSpacing.y;
