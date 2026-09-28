@@ -371,6 +371,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ClunkerLeaderHealthBellPatch.cs" />
+    <Compile Include="ClunkerLeaderDeckGridPatch.cs" />
     <Compile Include="CompanionStart.cs" />
     <Compile Include="DarkModeFlagPatch.cs" />
     <Compile Include="EatSelfTriggerPatch.cs" />

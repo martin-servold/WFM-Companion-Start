@@ -117,6 +117,11 @@ namespace CompanionStart
             clunkerLeaderType.miniboss = true;
             clunkerLeaderType.canReserve = false;
             clunkerLeaderType.canRecall = false;
+
+            // CardContainerGrid (e.g. the deck viewer) sorts by sortPriority. Clunker's is 2, after
+            // Friendly's 1, so the leader was listed after every companion instead of first. Use
+            // vanilla Leader's priority so it sorts with the companions and stays at the front.
+            clunkerLeaderType.sortPriority = Get<CardType>("Leader").sortPriority;
             AddressableLoader.AddToGroup("CardType", clunkerLeaderType);
 
             // CardManager builds its per-CardType render-prefab pool once, at scene start, from

@@ -13,7 +13,7 @@ dotnet build "Companion Start/Companion Start.csproj"
 ```
 
 - On Linux the csproj sets `FrameworkPathOverride` to `/usr/lib/mono/4.7.1-api`, so the mono reference assemblies must be installed.
-- The post-build step runs `PostBuild.ps1` through `pwsh`. It copies `CompanionStart.dll` and `icon.png` into the game's mod folder (`.../Wildfrost_Data/StreamingAssets/Mods/companionstart`). It also mirrors the whole solution, minus bin/obj/.vs/.git, into that folder's `Source/` subfolder. So every build deploys straight into the local game install.
+- The post-build step runs `PostBuild.ps1` through `pwsh`. It copies `CompanionStart.dll` and `icon.png` into the game's mod folder (`.../Wildfrost_Data/StreamingAssets/Mods/companionstart`). It also mirrors the whole solution, minus bin/obj/.vs/.git, into that folder's `Source/` subfolder. So every build deploys straight into the local game install. The DLL is swapped in by renaming a temp copy. Overwriting it in place while the game runs breaks the loaded mod (`BadImageFormatException: Method has zero rva` from a Harmony `DMD<...>` frame), so if that error shows up, first check whether the DLL was rebuilt mid-session. Restart the game to load a new build.
 - There are no tests and no linter. You verify changes by launching the modded game and playing. Use `Debug.Log` lines prefixed with `CompanionStart:` for diagnostics.
 - New `.cs` files must be added as `<Compile Include=...>` in the csproj by hand, because non-SDK projects don't glob.
 - Commits bump `AssemblyVersion`/`AssemblyFileVersion` in `Companion Start/Properties/AssemblyInfo.cs` (see git log: "..., bump version").
