@@ -371,6 +371,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ClunkerLeaderAllyEffects.cs" />
     <Compile Include="ClunkerLeaderHealthBellPatch.cs" />
     <Compile Include="ClunkerLeaderDeckGridPatch.cs" />
     <Compile Include="CompanionStart.cs" />

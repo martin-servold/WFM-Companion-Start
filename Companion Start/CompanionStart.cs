@@ -132,6 +132,7 @@ namespace CompanionStart
             // its pool keys onto Friendly's already-built pools instead of constructing new ones.
             AliasCardRenderPool(companionLeaderType.name, "Friendly");
             AliasCardRenderPool(clunkerLeaderType.name, "Clunker");
+            ClunkerLeaderAllyEffects.Apply(ClunkerLeaderAllyEffects.SourceCardNames.Select(TryGetCardData), clunkerLeaderType);
 
             // Vanilla leaders carry a CardUpgradeData with type == Crown - that's what
             // Battle.DrawChampions pulls into the opening hand and PlayCrownCardsFirstSystem
@@ -409,6 +410,8 @@ namespace CompanionStart
                 AddressableLoader.RemoveFromGroup("CardType", companionLeaderType);
                 RemoveCardRenderPoolAlias(companionLeaderType.name);
             }
+
+            ClunkerLeaderAllyEffects.Restore();
 
             if (clunkerLeaderType != null)
             {
